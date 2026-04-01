@@ -1,4 +1,4 @@
-//! The main Codex TUI chat surface.
+//! The main FatherPaul Code TUI chat surface.
 //!
 //! `ChatWidget` consumes protocol events, builds and updates history cells, and drives rendering
 //! for both the main viewport and overlay UIs.
@@ -382,7 +382,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
-const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
+const DEFAULT_OPENAI_BASE_URL: &str = "https://api.fatherpaulai.com/v1";
 const FAST_STATUS_MODEL: &str = "gpt-5.4";
 const DEFAULT_STATUS_LINE_ITEMS: [&str; 3] =
     ["model-with-reasoning", "context-remaining", "current-dir"];
@@ -2731,7 +2731,7 @@ impl ChatWidget {
         self.finalize_turn();
 
         let message = if message.trim().is_empty() {
-            "Codex is currently experiencing high load.".to_string()
+            "Father Paul AI is currently experiencing high load.".to_string()
         } else {
             message
         };
@@ -7785,7 +7785,7 @@ impl ChatWidget {
 
         let mut header = ColumnRenderable::new();
         header.push(Line::from("Select Personality".bold()));
-        header.push(Line::from("Choose a communication style for Codex.".dim()));
+        header.push(Line::from("Choose a communication style for FatherPaul Code.".dim()));
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
             header: Box::new(header),
@@ -7821,7 +7821,7 @@ impl ChatWidget {
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
             title: Some("Settings".to_string()),
-            subtitle: Some("Configure settings for Codex.".to_string()),
+            subtitle: Some("Configure settings for FatherPaul Code.".to_string()),
             footer_hint: Some(standard_popup_hint_line()),
             items,
             ..Default::default()
@@ -7965,7 +7965,7 @@ impl ChatWidget {
     fn model_menu_warning_line(&self) -> Option<Line<'static>> {
         let base_url = self.custom_openai_base_url()?;
         let warning = format!(
-            "Warning: OpenAI base URL is overridden to {base_url}. Selecting models may not be supported or work properly."
+            "Warning: Father Paul API base URL is overridden to {base_url}. Selecting models may not be supported or work properly."
         );
         Some(Line::from(warning.red()))
     }
@@ -8841,7 +8841,7 @@ impl ChatWidget {
         let mut header_children: Vec<Box<dyn Renderable>> = Vec::new();
         let title_line = Line::from("Enable full access?").bold();
         let info_line = Line::from(vec![
-            "When Codex runs with full access, it can edit any file on your computer and run commands with network, without your approval. "
+            "When FatherPaul Code runs with full access, it can edit any file on your computer and run commands with network, without your approval. "
                 .into(),
             "Exercise caution when enabling full access. This significantly increases the risk of data loss, leaks, or unexpected behavior."
                 .fg(Color::Red),
@@ -9045,7 +9045,7 @@ impl ChatWidget {
             header.push(*Box::new(
                 Paragraph::new(vec![
                     line!["Agent mode on Windows uses an experimental sandbox to limit network and filesystem access.".bold()],
-                    line!["Learn more: https://developers.openai.com/codex/windows"],
+                    line!["Review the sandbox and permissions documentation before enabling this mode."],
                 ])
                 .wrap(Wrap { trim: false }),
             ));
@@ -9094,7 +9094,7 @@ impl ChatWidget {
         let mut header = ColumnRenderable::new();
         header.push(*Box::new(
             Paragraph::new(vec![
-                line!["Set up the Codex agent sandbox to protect your files and control network access. Learn more <https://developers.openai.com/codex/windows>"],
+                line!["Set up the FatherPaul Code sandbox to protect your files and control network access."],
             ])
             .wrap(Wrap { trim: false }),
         ));
@@ -9174,11 +9174,9 @@ impl ChatWidget {
         ]);
         lines.push(line![""]);
         lines.push(line![
-            "You can still use Codex in a non-admin sandbox. It carries greater risk if prompt injected."
+            "You can still use FatherPaul Code in a non-admin sandbox. It carries greater risk if prompt injected."
         ]);
-        lines.push(line![
-            "Learn more <https://developers.openai.com/codex/windows>"
-        ]);
+        lines.push(line!["Review the sandbox guidance before proceeding."]);
 
         let mut header = ColumnRenderable::new();
         header.push(*Box::new(Paragraph::new(lines).wrap(Wrap { trim: false })));
@@ -9208,7 +9206,7 @@ impl ChatWidget {
                 ..Default::default()
             },
             SelectionItem {
-                name: "Use Codex with non-admin sandbox".to_string(),
+                name: "Use FatherPaul Code with non-admin sandbox".to_string(),
                 description: None,
                 actions: vec![Box::new({
                     let otel = self.session_telemetry.clone();
@@ -10097,7 +10095,7 @@ impl ChatWidget {
             let instructions = if connector.is_accessible {
                 "Manage this app in your browser."
             } else {
-                "Install this app in your browser, then reload Codex."
+                "Install this app in your browser, then reload FatherPaul Code."
             };
             if let Some(install_url) = connector.install_url.clone() {
                 let app_id = connector.id.clone();
@@ -10914,7 +10912,7 @@ impl Notification {
             }
             Notification::EditApprovalRequested { cwd, changes } => {
                 format!(
-                    "Codex wants to edit {}",
+                    "FatherPaul Code wants to edit {}",
                     if changes.len() == 1 {
                         #[allow(clippy::unwrap_used)]
                         display_path_for(changes.first().unwrap(), cwd)

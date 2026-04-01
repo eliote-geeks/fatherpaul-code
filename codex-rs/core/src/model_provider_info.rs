@@ -1,7 +1,7 @@
-//! Registry of model providers supported by Codex.
+//! Registry of model providers supported by FatherPaul Code.
 //!
 //! Providers can be defined in two places:
-//!   1. Built-in defaults compiled into the binary so Codex works out-of-the-box.
+//!   1. Built-in defaults compiled into the binary so FatherPaul Code works out-of-the-box.
 //!   2. User-defined entries inside `~/.codex/config.toml` under the `model_providers`
 //!      key. These override or extend the defaults at runtime.
 
@@ -40,7 +40,7 @@ pub(crate) const OLLAMA_CHAT_PROVIDER_REMOVED_ERROR: &str = "`ollama-chat` is no
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum WireApi {
-    /// The Responses API exposed by OpenAI at `/v1/responses`.
+    /// The Responses API exposed by Father Paul compatible providers at `/v1/responses`.
     #[default]
     Responses,
 }
@@ -74,7 +74,7 @@ impl<'de> Deserialize<'de> for WireApi {
 pub struct ModelProviderInfo {
     /// Friendly display name.
     pub name: String,
-    /// Base URL for the provider's OpenAI-compatible API.
+    /// Base URL for the provider's Responses-compatible API.
     pub base_url: Option<String>,
     /// Environment variable that stores the user's API key for this provider.
     pub env_key: Option<String>,
@@ -122,7 +122,7 @@ pub struct ModelProviderInfo {
     /// it as failed.
     pub websocket_connect_timeout_ms: Option<u64>,
 
-    /// Does this provider require an OpenAI API Key or ChatGPT login token? If true,
+    /// Does this provider require a managed login token? If true,
     /// user is presented with login screen on first run, and login preference and token/key
     /// are stored in auth.json. If false (which is the default), login screen is skipped,
     /// and API key (if needed) comes from the "env_key" environment variable.
@@ -331,13 +331,11 @@ pub fn built_in_model_providers(
     use ModelProviderInfo as P;
     let openai_provider = P::create_openai_provider(openai_base_url);
 
-    // We do not want to be in the business of adjucating which third-party
-    // providers are bundled with Codex CLI, so we only include the OpenAI and
-    // open source ("oss") providers by default. Users are encouraged to add to
+    // We only bundle the Father Paul provider and open source ("oss")
+    // providers by default. Users are encouraged to add to
     // `model_providers` in config.toml to add their own providers.
     [
         (FATHERPAUL_PROVIDER_ID, openai_provider.clone()),
-        (OPENAI_PROVIDER_ID, openai_provider),
         (
             OLLAMA_OSS_PROVIDER_ID,
             create_oss_provider(DEFAULT_OLLAMA_PORT, WireApi::Responses),

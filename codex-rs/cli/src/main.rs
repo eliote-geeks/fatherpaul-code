@@ -125,7 +125,7 @@ enum Subcommand {
     #[clap(hide = true)]
     Execpolicy(ExecpolicyCommand),
 
-    /// Apply the latest diff produced by Codex agent as a `git apply` to your local working tree.
+    /// Apply the latest diff produced by FatherPaul Code as a `git apply` to your local working tree.
     #[clap(visible_alias = "a")]
     Apply(ApplyCommand),
 
@@ -135,7 +135,7 @@ enum Subcommand {
     /// Fork a previous interactive session (picker by default; use --last to fork the most recent).
     Fork(ForkCommand),
 
-    /// [EXPERIMENTAL] Browse tasks from Codex Cloud and apply changes locally.
+    /// [EXPERIMENTAL] Browse remote tasks and apply changes locally.
     #[clap(name = "cloud", alias = "cloud-tasks")]
     Cloud(CloudTasksCli),
 
@@ -349,7 +349,7 @@ struct AppServerCommand {
     /// enabled = false
     /// ```
     ///
-    /// See https://developers.openai.com/codex/config-advanced/#metrics for more details.
+    /// See the FatherPaul Code configuration guide for more details.
     #[arg(long = "analytics-default-enabled")]
     analytics_default_enabled: bool,
 
@@ -366,7 +366,7 @@ enum AppServerSubcommand {
     /// [experimental] Generate JSON Schema for the app server protocol.
     GenerateJsonSchema(GenerateJsonSchemaCommand),
 
-    /// [internal] Generate internal JSON Schema artifacts for Codex tooling.
+    /// [internal] Generate internal JSON Schema artifacts for FatherPaul Code tooling.
     #[clap(hide = true)]
     GenerateInternalJsonSchema(GenerateInternalJsonSchemaCommand),
 }
@@ -1219,7 +1219,7 @@ async fn run_interactive_tui(
         }
 
         eprintln!(
-            "WARNING: TERM is set to \"dumb\". Codex's interactive TUI may not work in this terminal."
+            "WARNING: TERM is set to \"dumb\". FatherPaul Code may not work correctly in this terminal."
         );
         if !confirm("Continue anyway? [y/N]: ")? {
             return Ok(AppExitInfo::fatal(

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+BIN_PATH="$ROOT_DIR/codex-rs/target/release/codex"
+
+if [[ ! -x "$BIN_PATH" ]]; then
+  echo "fatherpaul-code binary not found at $BIN_PATH" >&2
+  echo "Build it first with: cargo build -p codex-cli --release" >&2
+  exit 1
+fi
+
+exec "$BIN_PATH" "$@"
