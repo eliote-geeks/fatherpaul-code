@@ -4,12 +4,48 @@ set -euo pipefail
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 BIN_PATH="$ROOT_DIR/codex-rs/target/release/codex"
+DEBUG_BIN_PATH="$ROOT_DIR/codex-rs/target/debug/codex"
 export CODEX_HOME="${CODEX_HOME:-$ROOT_DIR/config/fatherpaul}"
 
-if [[ ! -x "$BIN_PATH" ]]; then
+select_bin_path() {
+  local requested_cmd="${1:-}"
+
+  if [[ "$requested_cmd" == "login" && -x "$BIN_PATH" ]]; then
+    if grep -a -q "FatherPaul Code uses Father Paul API keys" "$BIN_PATH" 2>/dev/null; then
+      if [[ -x "$DEBUG_BIN_PATH" ]]; then
+        echo "$DEBUG_BIN_PATH"
+        return 0
+      fi
+      echo "Stale FatherPaul Code release binary detected for login." >&2
+      echo "Compiling an up-to-date CLI binary..." >&2
+      (
+        cd "$ROOT_DIR/codex-rs"
+        source /root/.cargo/env
+        cargo build -p codex-cli >&2
+      )
+      if [[ -x "$DEBUG_BIN_PATH" ]]; then
+        echo "$DEBUG_BIN_PATH"
+        return 0
+      fi
+      echo "Failed to build an updated FatherPaul Code binary." >&2
+      exit 1
+    fi
+  fi
+
+  if [[ -x "$BIN_PATH" ]]; then
+    echo "$BIN_PATH"
+    return 0
+  fi
+
+  if [[ -x "$DEBUG_BIN_PATH" ]]; then
+    echo "$DEBUG_BIN_PATH"
+    return 0
+  fi
+
   echo "fatherpaul-code binary not found at $BIN_PATH" >&2
   echo "Build it first with: cargo build -p codex-cli --release" >&2
   exit 1
-fi
+}
 
-exec "$BIN_PATH" "$@"
+EXECUTABLE="$(select_bin_path "${1:-}")"
+exec "$EXECUTABLE" "$@"
