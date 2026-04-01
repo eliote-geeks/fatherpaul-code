@@ -523,7 +523,7 @@ impl HistoryCell for UpdateAvailableHistoryCell {
         } else {
             line![
                 "See ",
-                "https://github.com/openai/codex".cyan().underlined(),
+                "https://github.com/eliote-geeks/fatherpaul-code".cyan().underlined(),
                 " for installation options."
             ]
         };
@@ -531,14 +531,14 @@ impl HistoryCell for UpdateAvailableHistoryCell {
         let content = text![
             line![
                 padded_emoji("✨").bold().cyan(),
-                "Update available!".bold().cyan(),
+                "FatherPaul Code update available!".bold().cyan(),
                 " ",
                 format!("{CODEX_CLI_VERSION} -> {}", self.latest_version).bold(),
             ],
             update_instruction,
             "",
             "See full release notes:",
-            "https://github.com/openai/codex/releases/latest"
+            "https://github.com/eliote-geeks/fatherpaul-code/releases/latest"
                 .cyan()
                 .underlined(),
         ];

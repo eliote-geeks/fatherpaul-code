@@ -1,11 +1,11 @@
 /// Update action the CLI should perform after the TUI exits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpdateAction {
-    /// Update via `npm install -g @openai/codex@latest`.
+    /// Update via `npm install -g fatherpaul-code@latest`.
     NpmGlobalLatest,
-    /// Update via `bun install -g @openai/codex@latest`.
+    /// Update via `bun install -g fatherpaul-code@latest`.
     BunGlobalLatest,
-    /// Update via `brew upgrade codex`.
+    /// Update via `brew upgrade fatherpaul-code`.
     BrewUpgrade,
 }
 
@@ -13,9 +13,9 @@ impl UpdateAction {
     /// Returns the list of command-line arguments for invoking the update.
     pub fn command_args(self) -> (&'static str, &'static [&'static str]) {
         match self {
-            UpdateAction::NpmGlobalLatest => ("npm", &["install", "-g", "@openai/codex"]),
-            UpdateAction::BunGlobalLatest => ("bun", &["install", "-g", "@openai/codex"]),
-            UpdateAction::BrewUpgrade => ("brew", &["upgrade", "--cask", "codex"]),
+            UpdateAction::NpmGlobalLatest => ("npm", &["install", "-g", "fatherpaul-code@latest"]),
+            UpdateAction::BunGlobalLatest => ("bun", &["install", "-g", "fatherpaul-code@latest"]),
+            UpdateAction::BrewUpgrade => ("brew", &["upgrade", "--cask", "fatherpaul-code"]),
         }
     }
 

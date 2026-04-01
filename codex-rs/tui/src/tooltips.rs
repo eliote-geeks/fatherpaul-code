@@ -4,19 +4,19 @@ use lazy_static::lazy_static;
 use rand::Rng;
 
 const ANNOUNCEMENT_TIP_URL: &str =
-    "https://raw.githubusercontent.com/openai/codex/main/announcement_tip.toml";
+    "https://raw.githubusercontent.com/eliote-geeks/fatherpaul-code/main/announcement_tip.toml";
 
 const IS_MACOS: bool = cfg!(target_os = "macos");
 const IS_WINDOWS: bool = cfg!(target_os = "windows");
 
-const PAID_TOOLTIP: &str = "*New* Try the **Codex App** with 2x rate limits until *April 2nd*. Run 'codex app' or visit https://chatgpt.com/codex?app-landing-page=true";
-const PAID_TOOLTIP_WINDOWS: &str = "*New* Try the **Codex App**, now available on **Windows**, with 2x rate limits until *April 2nd*. Run 'codex app' or visit https://chatgpt.com/codex?app-landing-page=true";
-const PAID_TOOLTIP_NON_MAC: &str = "*New* 2x rate limits until *April 2nd*.";
+const PAID_TOOLTIP: &str = "*New* Use FatherPaul Code with your Father Paul AI account for faster local workflows.";
+const PAID_TOOLTIP_WINDOWS: &str = "*New* FatherPaul Code is available on Windows for local coding workflows.";
+const PAID_TOOLTIP_NON_MAC: &str = "*New* FatherPaul Code supports local coding workflows with Father Paul AI.";
 const FAST_TOOLTIP: &str = "*New* Use **/fast** to enable our fastest inference at 2X plan usage.";
-const OTHER_TOOLTIP: &str = "*New* Build faster with the **Codex App**. Run 'codex app' or visit https://chatgpt.com/codex?app-landing-page=true";
-const OTHER_TOOLTIP_NON_MAC: &str = "*New* Build faster with Codex.";
+const OTHER_TOOLTIP: &str = "*New* Build faster with FatherPaul Code.";
+const OTHER_TOOLTIP_NON_MAC: &str = "*New* Build faster with FatherPaul Code.";
 const FREE_GO_TOOLTIP: &str =
-    "*New* For a limited time, Codex is included in your plan for free – let’s build together.";
+    "*New* Explore FatherPaul Code with your Father Paul AI account.";
 
 const RAW_TOOLTIPS: &str = include_str!("../tooltips.txt");
 
@@ -49,7 +49,7 @@ fn experimental_tooltips() -> Vec<&'static str> {
         .collect()
 }
 
-/// Pick a random tooltip to show to the user when starting Codex.
+/// Pick a random tooltip to show to the user when starting FatherPaul Code.
 pub(crate) fn get_tooltip(plan: Option<PlanType>, fast_mode_enabled: bool) -> Option<String> {
     let mut rng = rand::rng();
 

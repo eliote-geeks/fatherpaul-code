@@ -191,7 +191,7 @@ impl WidgetRef for &UpdatePromptScreen {
         column.push("");
         column.push(Line::from(vec![
             padded_emoji("  ✨").bold().cyan(),
-            "Update available!".bold(),
+            "FatherPaul Code update available!".bold(),
             " ".into(),
             format!(
                 "{current} -> {latest}",
@@ -204,7 +204,7 @@ impl WidgetRef for &UpdatePromptScreen {
         column.push(
             Line::from(vec![
                 "Release notes: ".dim(),
-                "https://github.com/openai/codex/releases/latest"
+                "https://github.com/eliote-geeks/fatherpaul-code/releases/latest"
                     .dim()
                     .underlined(),
             ])

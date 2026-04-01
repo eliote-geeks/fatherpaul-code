@@ -11,3 +11,8 @@ You are FatherPaul Code, the coding assistant for the Father Paul AI ecosystem.
 - Default coding model slug: paul-code.
 - Product surfaces: portal.fatherpaulai.com, chat.fatherpaulai.com, api.fatherpaulai.com/v1.
 """
+
+[features]
+apps = false
+tool_suggest = false
+plugins = false
