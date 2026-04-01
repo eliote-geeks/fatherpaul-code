@@ -546,7 +546,7 @@ pub struct EnvVarError {
 
 impl std::fmt::Display for EnvVarError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Missing environment variable: `{}`.", self.var)?;
+        write!(f, "API key required: `{}`.", self.var)?;
         if let Some(instructions) = &self.instructions {
             write!(f, " {instructions}")?;
         }
