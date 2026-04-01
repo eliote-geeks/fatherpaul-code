@@ -1646,6 +1646,8 @@ dependencies = [
  "predicates",
  "pretty_assertions",
  "regex-lite",
+ "reqwest",
+ "serde",
  "serde_json",
  "sqlx",
  "supports-color 3.0.2",
@@ -1655,6 +1657,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "webbrowser",
 ]
 
 [[package]]

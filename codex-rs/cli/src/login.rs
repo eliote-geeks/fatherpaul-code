@@ -14,15 +14,19 @@ use codex_core::auth::CLIENT_ID;
 use codex_core::auth::login_with_api_key;
 use codex_core::auth::logout;
 use codex_core::config::Config;
+use codex_login::default_client::build_reqwest_client;
 use codex_login::ServerOptions;
 use codex_login::run_device_code_login;
 use codex_login::run_login_server;
 use codex_protocol::config_types::ForcedLoginMethod;
 use codex_utils_cli::CliConfigOverrides;
+use reqwest::StatusCode;
+use serde::Deserialize;
 use std::fs::OpenOptions;
 use std::io::IsTerminal;
 use std::io::Read;
 use std::path::PathBuf;
+use std::time::Duration;
 use tracing_appender::non_blocking;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::EnvFilter;
@@ -35,6 +39,46 @@ const CHATGPT_LOGIN_DISABLED_MESSAGE: &str =
 const API_KEY_LOGIN_DISABLED_MESSAGE: &str =
     "API key login is required for FatherPaul Code.";
 const LOGIN_SUCCESS_MESSAGE: &str = "Successfully logged in";
+const FATHERPAUL_PORTAL_CLIENT_NAME: &str = "fatherpaul-code";
+
+#[derive(Debug, Deserialize)]
+struct FatherPaulDeviceStartResponse {
+    device_code: String,
+    user_code: String,
+    verification_uri: String,
+    verification_uri_complete: String,
+    expires_in: u64,
+    interval: u64,
+    polling_endpoint: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FatherPaulDevicePollResponse {
+    status: String,
+    detail: Option<String>,
+    interval: Option<u64>,
+    access_token: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FatherPaulCliSessionUser {
+    email: String,
+    full_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FatherPaulCliSessionSubscription {
+    plan: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FatherPaulCliSessionResponse {
+    status: String,
+    user: FatherPaulCliSessionUser,
+    subscription: FatherPaulCliSessionSubscription,
+    api_base_url: String,
+    api_key: String,
+}
 
 /// Installs a small file-backed tracing layer for direct `codex login` flows.
 ///
@@ -158,6 +202,239 @@ pub async fn run_login_with_chatgpt(cli_config_overrides: CliConfigOverrides) ->
     }
 }
 
+fn fatherpaul_portal_base_url(config: &Config) -> String {
+    config.chatgpt_base_url.trim_end_matches('/').to_string()
+}
+
+fn print_fatherpaul_device_prompt(
+    verification_uri: &str,
+    verification_uri_complete: &str,
+    user_code: &str,
+    expires_in: u64,
+    open_browser: bool,
+) {
+    if open_browser {
+        eprintln!(
+            "Connexion Father Paul en cours.\n\nSi le navigateur ne s'ouvre pas, autorisez ce terminal ici:\n{verification_uri_complete}\n\nCode: {user_code}\nExpiration: {} minutes\n",
+            expires_in / 60
+        );
+    } else {
+        eprintln!(
+            "Autorisez ce terminal sur Father Paul AI.\n\n1. Ouvrez: {verification_uri}\n2. Entrez le code: {user_code}\nExpiration: {} minutes\n",
+            expires_in / 60
+        );
+    }
+}
+
+async fn start_fatherpaul_device_login(
+    portal_base_url: &str,
+) -> std::io::Result<FatherPaulDeviceStartResponse> {
+    let client = build_reqwest_client();
+    let response = client
+        .post(format!("{portal_base_url}/api/cli/device/start"))
+        .json(&serde_json::json!({ "client_name": FATHERPAUL_PORTAL_CLIENT_NAME }))
+        .send()
+        .await
+        .map_err(std::io::Error::other)?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(std::io::Error::other(format!(
+            "Father Paul CLI authorization start failed ({status}): {body}"
+        )));
+    }
+
+    response.json().await.map_err(std::io::Error::other)
+}
+
+async fn poll_fatherpaul_device_login(
+    polling_endpoint: &str,
+    device_code: &str,
+    interval_secs: u64,
+) -> std::io::Result<String> {
+    let client = build_reqwest_client();
+    let mut poll_every = interval_secs.max(2);
+
+    loop {
+        let response = client
+            .post(polling_endpoint)
+            .json(&serde_json::json!({ "device_code": device_code }))
+            .send()
+            .await
+            .map_err(std::io::Error::other)?;
+
+        let status_code = response.status();
+        let body: FatherPaulDevicePollResponse =
+            response.json().await.map_err(std::io::Error::other)?;
+
+        match body.status.as_str() {
+            "authorization_pending" => {
+                poll_every = body.interval.unwrap_or(poll_every).max(2);
+            }
+            "authorized" => {
+                let Some(access_token) = body.access_token else {
+                    return Err(std::io::Error::other(
+                        "Father Paul portal authorized the CLI but did not return an access token.",
+                    ));
+                };
+                return Ok(access_token);
+            }
+            "expired_token" => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    body.detail.unwrap_or_else(|| "Device code expired".to_string()),
+                ));
+            }
+            "access_denied" => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    body.detail.unwrap_or_else(|| "Authorization denied".to_string()),
+                ));
+            }
+            "already_used" => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    body.detail
+                        .unwrap_or_else(|| "Authorization already consumed".to_string()),
+                ));
+            }
+            other => {
+                return Err(std::io::Error::other(format!(
+                    "Unexpected Father Paul device login status `{other}` (HTTP {status_code})"
+                )));
+            }
+        }
+
+        tokio::time::sleep(Duration::from_secs(poll_every)).await;
+    }
+}
+
+async fn fetch_fatherpaul_cli_session(
+    portal_base_url: &str,
+    access_token: &str,
+) -> std::io::Result<FatherPaulCliSessionResponse> {
+    let client = build_reqwest_client();
+    let response = client
+        .get(format!("{portal_base_url}/api/cli/session"))
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(std::io::Error::other)?;
+
+    if response.status() == StatusCode::FORBIDDEN {
+        let body = response.text().await.unwrap_or_default();
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!("Father Paul account is not eligible for CLI access yet: {body}"),
+        ));
+    }
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(std::io::Error::other(format!(
+            "Father Paul CLI session retrieval failed ({status}): {body}"
+        )));
+    }
+
+    response.json().await.map_err(std::io::Error::other)
+}
+
+async fn run_fatherpaul_browser_login_impl(
+    cli_config_overrides: CliConfigOverrides,
+    open_browser: bool,
+) -> ! {
+    let config = load_config_or_exit(cli_config_overrides).await;
+    let _login_log_guard = init_login_file_logging(&config);
+    tracing::info!("starting fatherpaul portal login flow");
+
+    let portal_base_url = fatherpaul_portal_base_url(&config);
+    let device = match start_fatherpaul_device_login(&portal_base_url).await {
+        Ok(device) => device,
+        Err(err) => {
+            eprintln!("Error starting Father Paul login: {err}");
+            std::process::exit(1);
+        }
+    };
+
+    print_fatherpaul_device_prompt(
+        &device.verification_uri,
+        &device.verification_uri_complete,
+        &device.user_code,
+        device.expires_in,
+        open_browser,
+    );
+
+    if open_browser {
+        let _ = webbrowser::open(&device.verification_uri_complete);
+    }
+
+    let access_token = match poll_fatherpaul_device_login(
+        &device.polling_endpoint,
+        &device.device_code,
+        device.interval,
+    )
+    .await
+    {
+        Ok(token) => token,
+        Err(err) => {
+            eprintln!("Error completing Father Paul login: {err}");
+            std::process::exit(1);
+        }
+    };
+
+    let session = match fetch_fatherpaul_cli_session(&portal_base_url, &access_token).await {
+        Ok(session) => session,
+        Err(err) => {
+            eprintln!("Error retrieving Father Paul CLI session: {err}");
+            std::process::exit(1);
+        }
+    };
+
+    if session.api_key.trim().is_empty() {
+        eprintln!("Error: Father Paul portal returned an empty CLI API key.");
+        std::process::exit(1);
+    }
+    if session.status != "ACTIVE" {
+        eprintln!(
+            "Error: Father Paul portal returned an unexpected CLI session status `{}`.",
+            session.status
+        );
+        std::process::exit(1);
+    }
+
+    match login_with_api_key(
+        &config.codex_home,
+        &session.api_key,
+        config.cli_auth_credentials_store_mode,
+    ) {
+        Ok(_) => {
+            let email = session.user.email;
+            let full_name = session.user.full_name.unwrap_or_default();
+            let plan = session
+                .subscription
+                .plan
+                .unwrap_or_else(|| "FREE".to_string());
+            eprintln!(
+                "{LOGIN_SUCCESS_MESSAGE}\nCompte: {}{}\nPlan: {plan}\nAPI: {}",
+                email,
+                if full_name.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({full_name})")
+                },
+                session.api_base_url
+            );
+            std::process::exit(0);
+        }
+        Err(err) => {
+            eprintln!("Error saving Father Paul CLI credentials: {err}");
+            std::process::exit(1);
+        }
+    }
+}
+
 pub async fn run_login_with_api_key(
     cli_config_overrides: CliConfigOverrides,
     api_key: String,
@@ -220,6 +497,10 @@ pub async fn run_login_with_device_code(
     issuer_base_url: Option<String>,
     client_id: Option<String>,
 ) -> ! {
+    if issuer_base_url.is_none() && client_id.is_none() {
+        run_fatherpaul_browser_login_impl(cli_config_overrides, false).await;
+    }
+
     let config = load_config_or_exit(cli_config_overrides).await;
     let _login_log_guard = init_login_file_logging(&config);
     tracing::info!("starting device code login flow");
@@ -258,6 +539,10 @@ pub async fn run_login_with_device_code_fallback_to_browser(
     issuer_base_url: Option<String>,
     client_id: Option<String>,
 ) -> ! {
+    if issuer_base_url.is_none() && client_id.is_none() {
+        run_fatherpaul_browser_login_impl(cli_config_overrides, true).await;
+    }
+
     let config = load_config_or_exit(cli_config_overrides).await;
     let _login_log_guard = init_login_file_logging(&config);
     tracing::info!("starting login flow with device code fallback");
