@@ -1,0 +1,210 @@
+name: fatherpaul-code-artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to package"
+        required: true
+        default: "0.0.1-dev"
+  push:
+    tags:
+      - "fatherpaul-code-v*.*.*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-linux-x64:
+    name: Build Linux x64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: codex-rs
+    env:
+      TARGET_TRIPLE: x86_64-unknown-linux-musl
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install Linux build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            pkg-config libcap-dev libubsan1 ripgrep
+
+      - uses: dtolnay/rust-toolchain@a0b273b48ed29de4470960879e8381ff45632f26 # 1.93.0
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Use hermetic Cargo home
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo_home="${GITHUB_WORKSPACE}/.cargo-home"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "$GITHUB_ENV"
+          echo "${cargo_home}/bin" >> "$GITHUB_PATH"
+          : > "${cargo_home}/config.toml"
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.14.0
+
+      - name: Install musl build tools
+        env:
+          TARGET: x86_64-unknown-linux-musl
+        run: bash "${GITHUB_WORKSPACE}/.github/scripts/install-musl-build-tools.sh"
+
+      - name: Configure musl rusty_v8 artifact overrides
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(python3 "${GITHUB_WORKSPACE}/.github/scripts/rusty_v8_bazel.py" resolved-v8-crate-version)"
+          base_url="https://github.com/openai/codex/releases/download/rusty-v8-v${version}"
+          binding_dir="${RUNNER_TEMP}/rusty_v8"
+          binding_path="${binding_dir}/src_binding_release_${TARGET_TRIPLE}.rs"
+          mkdir -p "${binding_dir}"
+          curl -fsSL "${base_url}/src_binding_release_${TARGET_TRIPLE}.rs" -o "${binding_path}"
+          echo "RUSTY_V8_ARCHIVE=${base_url}/librusty_v8_release_${TARGET_TRIPLE}.a.gz" >> "$GITHUB_ENV"
+          echo "RUSTY_V8_SRC_BINDING_PATH=${binding_path}" >> "$GITHUB_ENV"
+
+      - name: Build Linux binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --target "${TARGET_TRIPLE}" --release --bin codex -j 4
+
+      - name: Stage Linux vendor payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "${GITHUB_WORKSPACE}/scripts/stage-fatherpaul-code-target.py" \
+            --target "${TARGET_TRIPLE}" \
+            --release-dir "${GITHUB_WORKSPACE}/codex-rs/target/${TARGET_TRIPLE}/release" \
+            --output-root "${GITHUB_WORKSPACE}/dist/fatherpaul-code/vendor-src" \
+            --rg-path "$(command -v rg)"
+
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        with:
+          name: fatherpaul-vendor-linux-x64
+          path: dist/fatherpaul-code/vendor-src/x86_64-unknown-linux-musl/**
+
+  build-windows-x64:
+    name: Build Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: codex-rs
+    env:
+      TARGET_TRIPLE: x86_64-pc-windows-msvc
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: dtolnay/rust-toolchain@a0b273b48ed29de4470960879e8381ff45632f26 # 1.93.0
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install ripgrep
+        shell: powershell
+        run: |
+          choco install ripgrep -y --no-progress
+
+      - name: Build Windows binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --target "${TARGET_TRIPLE}" --release \
+            --bin codex \
+            --bin codex-windows-sandbox-setup \
+            --bin codex-command-runner -j 4
+
+      - name: Stage Windows vendor payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          RG_PATH="/c/ProgramData/chocolatey/bin/rg.exe"
+          if [[ ! -f "$RG_PATH" ]]; then
+            RG_PATH="$(cygpath -u "$(where.exe rg | tr -d '\r' | head -n 1)")"
+          fi
+          python3 "${GITHUB_WORKSPACE}/scripts/stage-fatherpaul-code-target.py" \
+            --target "${TARGET_TRIPLE}" \
+            --release-dir "${GITHUB_WORKSPACE}/codex-rs/target/${TARGET_TRIPLE}/release" \
+            --output-root "${GITHUB_WORKSPACE}/dist/fatherpaul-code/vendor-src" \
+            --rg-path "$RG_PATH" \
+            --windows-helpers
+
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        with:
+          name: fatherpaul-vendor-win32-x64
+          path: dist/fatherpaul-code/vendor-src/x86_64-pc-windows-msvc/**
+
+  package:
+    name: Package npm artifacts
+    needs:
+      - build-linux-x64
+      - build-windows-x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: fatherpaul-vendor-linux-x64
+          path: dist/fatherpaul-code/vendor-src/x86_64-unknown-linux-musl
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: fatherpaul-vendor-win32-x64
+          path: dist/fatherpaul-code/vendor-src/x86_64-pc-windows-msvc
+
+      - name: Normalize version from tag if needed
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${INPUT_VERSION:-}"
+          if [[ -z "${version}" ]]; then
+            version="${REF_NAME}"
+          fi
+          version="${version#fatherpaul-code-v}"
+          echo "PACKAGE_VERSION=${version}" >> "$GITHUB_ENV"
+
+      - name: Build npm tarballs
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/package-fatherpaul-code-artifacts.sh
+          ./scripts/package-fatherpaul-code-artifacts.sh \
+            "${PACKAGE_VERSION}" \
+            "${GITHUB_WORKSPACE}/dist/fatherpaul-code/vendor-src" \
+            "${GITHUB_WORKSPACE}/dist/fatherpaul-code/packages"
+
+      - name: Generate SHA256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE}/dist/fatherpaul-code/packages"
+          sha256sum *.tgz > SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        with:
+          name: fatherpaul-code-packages
+          path: |
+            dist/fatherpaul-code/packages/*.tgz
+            dist/fatherpaul-code/packages/SHA256SUMS.txt
